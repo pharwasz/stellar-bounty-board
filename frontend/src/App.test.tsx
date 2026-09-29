@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,7 +61,9 @@ function mockBrowserApis() {
 }
 
 async function renderBoard() {
-  vi.mocked(api.listBounties).mockResolvedValue([openBounty]);
+  vi.mocked(api.listBounties).mockResolvedValue({
+    data: [openBounty], total: 1, page: 1, pageSize: 10, hasMore: false,
+  });
   vi.mocked(api.listOpenIssues).mockResolvedValue([]);
   vi.mocked(api.getBounty).mockResolvedValue(openBounty);
 
@@ -161,8 +163,7 @@ describe("bounty-creation form validation", () => {
     await user.type(titleInput, "Valid title");
 
     const amountInput = screen.getByRole("spinbutton", { name: /reward/i });
-    await user.clear(amountInput);
-    await user.type(amountInput, "-50");
+    fireEvent.change(amountInput, { target: { value: "-50" } });
 
     const submitButton = screen.getByRole("button", { name: /create bounty/i });
     await user.click(submitButton);
@@ -232,5 +233,35 @@ describe("bounty-creation form validation", () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith("Bounty created successfully!");
     });
+  });
+});
+
+describe("bounty pagination", () => {
+  it("disables pagination controls appropriately and resets to page one after a filter change", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.listBounties)
+      .mockResolvedValueOnce({ data: [openBounty], total: 25, page: 1, pageSize: 10, hasMore: true })
+      .mockResolvedValueOnce({ data: [openBounty], total: 25, page: 2, pageSize: 10, hasMore: false })
+      .mockResolvedValueOnce({ data: [], total: 0, page: 1, pageSize: 10, hasMore: false });
+    vi.mocked(api.listOpenIssues).mockResolvedValue([]);
+    vi.mocked(api.getBounty).mockResolvedValue(openBounty);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+
+    await waitFor(() => expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "reserved" }));
+
+    await waitFor(() => {
+      expect(api.listBounties).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, limit: 10, status: "reserved" }),
+        expect.any(AbortSignal),
+      );
+    });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 });

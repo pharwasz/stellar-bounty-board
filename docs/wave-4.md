@@ -23,7 +23,7 @@ smart contracts, docs, and DevOps.
 |---|-------|------|
 | 1 | Extract `BountyCard` into its own component file | `frontend/src/App.tsx` |
 | 2 | Add dark mode toggle with localStorage persistence | `frontend/src/App.tsx` |
-| 3 | Add bounty list pagination (10 items per page) | `frontend/src/App.tsx` |
+| 3 | Add bounty list pagination (10 items per page, using the API's `page`, `limit`, and `total`) | `frontend/src/App.tsx` |
 | 4 | Add filter by bounty status (open/reserved/submitted/released/refunded) | `frontend/src/App.tsx` |
 | 5 | Add sort by amount (high → low / low → high) | `frontend/src/App.tsx` |
 | 6 | Add retry logic with exponential backoff for failed API requests | `frontend/src/api.ts` |

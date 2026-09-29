@@ -137,8 +137,11 @@ registry.registerPath({
   request: {
     query: z.object({
       q: z.string().optional().openapi({
-        description: "Case-insensitive substring filter applied to title, summary, and labels.",
+        description: "Case-insensitive substring filter applied to bounty title, summary, repository, status, and labels.",
       }),
+      repo: z.string().optional().openapi({ description: "Exact repository filter (owner/repo)." }),
+      minReward: z.coerce.number().min(0).optional().openapi({ description: "Minimum bounty amount." }),
+      maxReward: z.coerce.number().min(0).optional().openapi({ description: "Maximum bounty amount." }),
       contributor: z.string().optional().openapi({
         description: "Exact Stellar public key filter applied to the bounty contributor.",
       }),
@@ -169,12 +172,15 @@ registry.registerPath({
         description: "Page number (starts at 1, default 1).",
       }),
       pageSize: z.number().int().min(1).max(100).optional().openapi({
+        description: "Legacy alias for limit (max 100, default 20).",
+      }),
+      limit: z.number().int().min(1).max(100).optional().openapi({
         description: "Number of items per page (max 100, default 20).",
       }),
     }),
   },
   responses: {
-    200: jsonResponse("Array of all bounty records.", z.object({ data: z.array(bountyRecordSchema) })),
+    200: jsonResponse("Paginated bounty records and total filtered count.", paginatedBountiesSchema),
     400: errorResponse("Invalid query parameters (e.g., invalid date string, maintainer address, sort field, or order)."),
   },
 });

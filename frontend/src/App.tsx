@@ -8,7 +8,7 @@ import React, {
   type FormEvent,
 } from 'react';
 import { useBeforeUnload } from './useBeforeUnload';
-import { FolderGit2, Moon, Rocket, Search, Sun } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderGit2, Moon, Rocket, Search, Sun } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   createBounty,
@@ -26,7 +26,7 @@ import {
 import { useFreighter } from './hooks/useFreighter';
 import FreighterConnectButton from './components/FreighterConnectButton';
 import { statusCopy, actionCopy, readInitialFilters } from './constants';
-import { debounce, filterBounties } from './utils';
+import { debounce } from './utils';
 import { type Bounty, type BountyStatus, type CreateBountyPayload, type OpenIssue } from './types';
 
 import BountyCard from './BountyCard';
@@ -40,6 +40,7 @@ import ErrorBoundary from './ErrorBoundary';
 import SubmissionChecklistModal, { type SubmissionFormData } from './SubmissionChecklistModal';
 
 const DARK_MODE_KEY = 'stellar-bounty-board-theme';
+const BOUNTIES_PER_PAGE = 10;
 
 function useDarkMode() {
   const [dark, setDark] = useState<boolean>(() => {
@@ -113,6 +114,9 @@ function App() {
   const initialFilters = useMemo(() => readInitialFilters(), []);
   const [form, setForm] = useState<CreateBountyPayload>(initialForm);
   const [bounties, setBounties] = useState<Bounty[]>([]);
+  const [totalBounties, setTotalBounties] = useState(0);
+  const [hasMoreBounties, setHasMoreBounties] = useState(false);
+  const [page, setPage] = useState(1);
   const [, setIssues] = useState<OpenIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -160,6 +164,10 @@ function App() {
   const [sortDirection, setSortDirection] = useState(initialFilters.sortDirection);
   const [pathname, setPathname] = useState(window.location.pathname);
 
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery, statusFilter, minReward, maxReward, repoFilter, tokenFilter, sortOption, sortDirection, pathname]);
+
   const detailId = useMemo(() => {
     const match = pathname.match(/^\/bounties\/([^/]+)$/);
     return match ? decodeURIComponent(match[1] ?? '') : null;
@@ -188,13 +196,35 @@ function App() {
   }, []);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
+    const repoRouteMatch = pathname.match(/^\/repo\/([^/]+)\/([^/]+)$/);
+    const effectiveRepo = repoRouteMatch
+      ? `${decodeURIComponent(repoRouteMatch[1] ?? '')}/${decodeURIComponent(repoRouteMatch[2] ?? '')}`
+      : repoFilter;
+    const apiSort = sortOption.startsWith('reward-')
+      ? 'amount'
+      : sortOption.startsWith('deadline-')
+        ? 'deadline'
+        : 'createdAt';
     const [bountyData, issueData] = await Promise.all([
-      listBounties(signal),
+      listBounties({
+        page,
+        limit: BOUNTIES_PER_PAGE,
+        q: debouncedSearchQuery.trim() || undefined,
+        repo: effectiveRepo || undefined,
+        minReward: minReward || undefined,
+        maxReward: maxReward || undefined,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        tokenSymbol: tokenFilter || undefined,
+        sort: apiSort,
+        order: sortDirection,
+      }, signal),
       listOpenIssues(signal),
     ]);
-    setBounties(bountyData);
+    setBounties(bountyData.data);
+    setTotalBounties(bountyData.total);
+    setHasMoreBounties(bountyData.hasMore);
     setIssues(issueData);
-  }, []);
+  }, [page, debouncedSearchQuery, repoFilter, minReward, maxReward, statusFilter, tokenFilter, sortOption, sortDirection, pathname]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -271,6 +301,7 @@ function App() {
       setTokenFilter(filters.tokenFilter);
       setSortOption(filters.sortOption);
       setSortDirection(filters.sortDirection);
+      setPage(1);
     }
 
     window.addEventListener('popstate', handlePopState);
@@ -593,30 +624,7 @@ function App() {
     };
   }, [detailId]);
 
-  const filteredBounties = useMemo(() => {
-    const effectiveRepoFilter = repoRoute ? `${repoRoute.owner}/${repoRoute.name}` : repoFilter;
-    return filterBounties(bounties, {
-      searchQuery: debouncedSearchQuery,
-      statusFilter,
-      minReward,
-      maxReward,
-      repoFilter: effectiveRepoFilter,
-      tokenFilter,
-      sortOption,
-      sortDirection,
-    });
-  }, [
-    bounties,
-    debouncedSearchQuery,
-    statusFilter,
-    minReward,
-    maxReward,
-    repoFilter,
-    tokenFilter,
-    sortOption,
-    sortDirection,
-    repoRoute,
-  ]);
+  const filteredBounties = bounties;
 
   const groupedBounties = useMemo(() => {
     if (repoRoute) {
@@ -726,7 +734,7 @@ function App() {
           </div>
           <div className="header-actions">
             <FreighterConnectButton freighter={freighter} compact />
-            <button className="theme-toggle" onClick={toggleDark}>
+            <button className="theme-toggle" aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={toggleDark}>
               {dark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
           </div>
@@ -918,7 +926,10 @@ function App() {
                 ref={searchInputRef}
                 placeholder="Search by repo, title, or label..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setPage(1);
+                  setSearchQuery(e.target.value);
+                }}
               />
             </div>
             <div className="filter-chips">
@@ -926,7 +937,10 @@ function App() {
                 <button
                   key={status}
                   className={`filter-chip ${statusFilter === status ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(status)}
+                  onClick={() => {
+                    setPage(1);
+                    setStatusFilter(status);
+                  }}
                 >
                   {status}
                 </button>
@@ -981,6 +995,15 @@ function App() {
               }}
             />
           )}
+          <nav className="pagination-controls" aria-label="Bounty pages">
+            <button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+              <ChevronLeft size={18} />
+            </button>
+            <span>Page {page} of {Math.max(1, Math.ceil(totalBounties / BOUNTIES_PER_PAGE))} · {totalBounties} bounties</span>
+            <button type="button" aria-label="Next page" disabled={!hasMoreBounties} onClick={() => setPage((current) => current + 1)}>
+              <ChevronRight size={18} />
+            </button>
+          </nav>
         </section>
       </main>
 

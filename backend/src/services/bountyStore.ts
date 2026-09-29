@@ -503,8 +503,14 @@ function persistUpdated(
 }
 
 export interface ListBountiesOptions {
-  /** Case-insensitive substring filter applied to title, summary, and labels. */
+  /** Case-insensitive substring filter applied to bounty text and repository. */
   q?: string;
+  /** Exact repository filter. */
+  repo?: string;
+  /** Minimum bounty amount. */
+  minReward?: number;
+  /** Maximum bounty amount. */
+  maxReward?: number;
   /** Exact Stellar address filter applied to contributor. */
   contributor?: string;
   /** Exact Stellar address filter applied to maintainer. */
@@ -526,6 +532,9 @@ export interface ListBountiesOptions {
 export function listBounties(options: ListBountiesOptions = {}): BountyRecord[] {
   const records = normalizeRecords(readStore());
   const q = options.q?.trim().toLowerCase();
+  const repo = options.repo?.trim().toLowerCase();
+  const minReward = options.minReward;
+  const maxReward = options.maxReward;
   const contributor = options.contributor?.trim();
   const maintainer = options.maintainer?.trim();
   const tokenSymbol = options.tokenSymbol?.trim().toUpperCase();
@@ -541,14 +550,19 @@ export function listBounties(options: ListBountiesOptions = {}): BountyRecord[] 
       !q ||
       b.title.toLowerCase().includes(q) ||
       b.summary.toLowerCase().includes(q) ||
+      b.repo.toLowerCase().includes(q) ||
+      b.status.toLowerCase().includes(q) ||
       b.labels.some((l) => l.toLowerCase().includes(q));
+    const passesRepo = !repo || b.repo.toLowerCase() === repo;
+    const passesMinReward = minReward === undefined || b.amount >= minReward;
+    const passesMaxReward = maxReward === undefined || b.amount <= maxReward;
     const passesContributor = !contributor || b.contributor === contributor;
     const passesMaintainer = !maintainer || b.maintainer === maintainer;
     const passesTokenSymbol = !tokenSymbol || b.tokenSymbol.toUpperCase() === tokenSymbol;
     const passesStatus = !status || b.status === status;
     const passesDeadlineBefore = deadlineBefore === undefined || b.deadlineAt < deadlineBefore;
     const passesDeadlineAfter = deadlineAfter === undefined || b.deadlineAt > deadlineAfter;
-    if (passesQ && passesContributor && passesMaintainer && passesTokenSymbol && passesStatus && passesDeadlineBefore && passesDeadlineAfter) {
+    if (passesQ && passesRepo && passesMinReward && passesMaxReward && passesContributor && passesMaintainer && passesTokenSymbol && passesStatus && passesDeadlineBefore && passesDeadlineAfter) {
       result.push(b);
     }
   }
@@ -606,6 +620,9 @@ export async function listBountiesCached(
   }
 
   const q = options.q?.trim().toLowerCase();
+  const repo = options.repo?.trim().toLowerCase();
+  const minReward = options.minReward;
+  const maxReward = options.maxReward;
   const contributor = options.contributor?.trim();
   const maintainer = options.maintainer?.trim();
   const tokenSymbol = options.tokenSymbol?.trim().toUpperCase();
@@ -618,14 +635,19 @@ export async function listBountiesCached(
       !q ||
       b.title.toLowerCase().includes(q) ||
       b.summary.toLowerCase().includes(q) ||
+      b.repo.toLowerCase().includes(q) ||
+      b.status.toLowerCase().includes(q) ||
       b.labels.some((l) => l.toLowerCase().includes(q));
+    const passesRepo = !repo || b.repo.toLowerCase() === repo;
+    const passesMinReward = minReward === undefined || b.amount >= minReward;
+    const passesMaxReward = maxReward === undefined || b.amount <= maxReward;
     const passesContributor = !contributor || b.contributor === contributor;
     const passesMaintainer = !maintainer || b.maintainer === maintainer;
     const passesTokenSymbol = !tokenSymbol || b.tokenSymbol.toUpperCase() === tokenSymbol;
     const passesStatus = !status || b.status === status;
     const passesDeadlineBefore = deadlineBefore === undefined || b.deadlineAt < deadlineBefore;
     const passesDeadlineAfter = deadlineAfter === undefined || b.deadlineAt > deadlineAfter;
-    return passesQ && passesContributor && passesMaintainer && passesTokenSymbol && passesStatus && passesDeadlineBefore && passesDeadlineAfter;
+    return passesQ && passesRepo && passesMinReward && passesMaxReward && passesContributor && passesMaintainer && passesTokenSymbol && passesStatus && passesDeadlineBefore && passesDeadlineAfter;
   });
 
   sortBounties(filtered, options.sort ?? "createdAt", options.order ?? "desc");

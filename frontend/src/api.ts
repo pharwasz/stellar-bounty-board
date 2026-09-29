@@ -226,14 +226,60 @@ async function requestBlob(
   throw formatRetryError(retryLabel, retryAttempts, message);
 }
 
-export async function listBounties(signal?: AbortSignal): Promise<Bounty[]> {
-  const body = await requestJson<{ data: Bounty[] }>('/bounties', {
+export type BountyListOptions = {
+  page: number;
+  limit: number;
+  q?: string;
+  repo?: string;
+  contributor?: string;
+  maintainer?: string;
+  minReward?: string;
+  maxReward?: string;
+  status?: string;
+  tokenSymbol?: string;
+  sort?: string;
+  order?: string;
+};
+
+export type PaginatedBountyList = {
+  data: Bounty[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
+export async function listBounties(
+  options: BountyListOptions,
+  signal?: AbortSignal
+): Promise<PaginatedBountyList> {
+  const params = new URLSearchParams({ page: String(options.page), limit: String(options.limit) });
+  for (const key of ['q', 'repo', 'contributor', 'maintainer', 'minReward', 'maxReward', 'status', 'tokenSymbol', 'sort', 'order'] as const) {
+    const value = options[key];
+    if (value) params.set(key, value);
+  }
+  const body = await requestJson<PaginatedBountyList>(`/bounties?${params.toString()}`, {
     retry: true,
     retryLabel: 'Loading bounties',
     signal,
   });
 
-  return body.data;
+  return body;
+}
+
+export async function listAllBounties(
+  options: Omit<BountyListOptions, 'page' | 'limit'> = {},
+  signal?: AbortSignal
+): Promise<Bounty[]> {
+  const bounties: Bounty[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await listBounties({ ...options, page, limit: 100 }, signal);
+    bounties.push(...response.data);
+    if (!response.hasMore) return bounties;
+    page += 1;
+  }
 }
 
 export async function getBounty(id: string, signal?: AbortSignal): Promise<Bounty> {

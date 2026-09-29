@@ -976,8 +976,43 @@ Maintainers may \`cancel\` an \`open\` bounty before reservation, or \`refund\` 
             "name": "q",
             "required": false,
             "schema": {
-              "description": "Case-insensitive substring filter applied to title, summary, and labels.",
+              "description": "Case-insensitive substring filter applied to bounty title, summary, repository, status, and labels.",
               "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "repo",
+            "required": false,
+            "schema": {
+              "description": "Exact repository filter (owner/repo).",
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "minReward",
+            "required": false,
+            "schema": {
+              "description": "Minimum bounty amount.",
+              "minimum": 0,
+              "type": [
+                "number",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "maxReward",
+            "required": false,
+            "schema": {
+              "description": "Maximum bounty amount.",
+              "minimum": 0,
+              "type": [
+                "number",
+                "null",
+              ],
             },
           },
           {
@@ -1079,6 +1114,17 @@ Maintainers may \`cancel\` an \`open\` bounty before reservation, or \`refund\` 
             "name": "pageSize",
             "required": false,
             "schema": {
+              "description": "Legacy alias for limit (max 100, default 20).",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
               "description": "Number of items per page (max 100, default 20).",
               "maximum": 100,
               "minimum": 1,
@@ -1098,15 +1144,31 @@ Maintainers may \`cancel\` an \`open\` bounty before reservation, or \`refund\` 
                       },
                       "type": "array",
                     },
+                    "hasMore": {
+                      "type": "boolean",
+                    },
+                    "page": {
+                      "type": "integer",
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                    },
+                    "total": {
+                      "type": "integer",
+                    },
                   },
                   "required": [
                     "data",
+                    "total",
+                    "page",
+                    "pageSize",
+                    "hasMore",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Array of all bounty records.",
+            "description": "Paginated bounty records and total filtered count.",
           },
           "400": {
             "content": {

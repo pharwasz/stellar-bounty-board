@@ -353,7 +353,26 @@ app.get('/api/bounties/search', (req: Request, res: Response) => {
   try {
     const query = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
     const page = parsePaginationValue(req.query.page, 'page', 1, 1);
-    const pageSize = parsePaginationValue(req.query.pageSize, 'pageSize', 20, 1, 100);
+    const pageSize = req.query.limit !== undefined
+      ? parsePaginationValue(req.query.limit, 'limit', 20, 1, 100)
+      : parsePaginationValue(req.query.pageSize, 'pageSize', 20, 1, 100);
+    const repo = typeof req.query.repo === 'string' && req.query.repo.trim() ? req.query.repo.trim() : undefined;
+    const minReward = req.query.minReward === undefined
+      ? undefined
+      : Number(req.query.minReward);
+    const maxReward = req.query.maxReward === undefined
+      ? undefined
+      : Number(req.query.maxReward);
+
+    if (minReward !== undefined && (!Number.isFinite(minReward) || minReward < 0)) {
+      throw new Error('minReward must be a non-negative number.');
+    }
+    if (maxReward !== undefined && (!Number.isFinite(maxReward) || maxReward < 0)) {
+      throw new Error('maxReward must be a non-negative number.');
+    }
+    if (minReward !== undefined && maxReward !== undefined && minReward > maxReward) {
+      throw new Error('minReward must not exceed maxReward.');
+    }
     if (!query) {
       res.json({ data: [], total: 0, page, pageSize, hasMore: false });
       return;
@@ -489,10 +508,34 @@ app.get('/api/bounties', async (req: Request, res: Response) => {
       typeof req.query.tokenSymbol === 'string' && req.query.tokenSymbol.trim()
         ? req.query.tokenSymbol.trim()
         : undefined;
-    const sort = typeof req.query.sort === 'string' && req.query.sort.trim() ? req.query.sort.trim() : 'createdAt';
+        const sort = typeof req.query.sort === 'string' && req.query.sort.trim() ? req.query.sort.trim() : 'createdAt';
     const order = typeof req.query.order === 'string' && req.query.order.trim() ? req.query.order.trim() : 'desc';
+
+    const repo =
+      typeof req.query.repo === 'string' && req.query.repo.trim()
+        ? req.query.repo.trim()
+        : undefined;
+
+    const parseReward = (value: unknown, name: string): number | undefined => {
+      if (typeof value !== 'string' || !value.trim()) return undefined;
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error(`${name} must be a non-negative number`);
+      }
+      return n;
+    };
+    const minReward = parseReward(req.query.minReward, 'minReward');
+    const maxReward = parseReward(req.query.maxReward, 'maxReward');
+    if (minReward !== undefined && maxReward !== undefined && minReward > maxReward) {
+      throw new Error('minReward must be less than or equal to maxReward');
+    }
+
+    // `limit` is the primary page-size param; `pageSize` is a legacy alias.
     const page = parsePaginationValue(req.query.page, 'page', 1, 1);
-    const pageSize = parsePaginationValue(req.query.pageSize, 'pageSize', 20, 1, 100);
+    const pageSize =
+      req.query.limit !== undefined
+        ? parsePaginationValue(req.query.limit, 'limit', 20, 1, 100)
+        : parsePaginationValue(req.query.pageSize, 'pageSize', 20, 1, 100);
 
     let deadlineBefore: number | undefined;
     if (typeof req.query.deadlineBefore === 'string') {
@@ -527,6 +570,9 @@ app.get('/api/bounties', async (req: Request, res: Response) => {
 
     const all = await listBountiesCached({
       q,
+      repo,
+      minReward,
+      maxReward,
       contributor,
       maintainer,
       status: status as never,
